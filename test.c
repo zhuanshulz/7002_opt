@@ -43,7 +43,7 @@
 //    delay[0] = b[1] * x1 + b[2] * x0 - a[1] * sum - a[2] * y0;
 //    delay[1] = b[2] * x1 - a[2] * sum;
 //}
-
+#define N (128)
 void DSPF_sp_biquad_cn(float *x, float *b, float *a,
     float *delay, float *y, const int nx)
 {
@@ -57,22 +57,86 @@ void DSPF_sp_biquad_cn(float *x, float *b, float *a,
     }
 }        
 
+
+void test(float *x, float *b, float *a,
+    float *delay, float *y, const int nx){
+    int i;
+    vector float*  Xaddr   = (vector float*)0x040000000;
+    vector float*  Yaddr   = (vector float*)0x040000200;
+    vector float*  b0Xaddr   = (vector float*)0x040000400;
+    vector float*  b1Xaddr   = (vector float*)0x040000600;
+    vector float*  b2Xaddr   = (vector float*)0x040000800;
+    M7002_datatrans(x, Xaddr, N*4);     //将X搬移到AM中。
+    }
+
+
 void DSPF_sp_biquad_opt(float *x, float *b, float *a,
     float *delay, float *y, const int nx)
 {
-    int i;
+    // float* Xaddr_DDR;
+    // int X_Num = N, j = 0;
+    // Xaddr_DDR = (float*) malloc(sizeof(float)*X_Num);
+    // for(j=0;j<X_Num;j++) {
+	//     Xaddr_DDR[j] = x[j];
+    // }
 	
+    /*定义vector float指针变量，并在AM中分配地址*/
+    // 128个float类型数据，128*4 = 512 = 0x200
+    // 128/16 = 8
+    int i;
+    vector float*  Xaddr   = (vector float*)0x040000000;
+    // vector float*  Yaddr   = (vector float*)0x040000200;
+    vector float*  b0Xaddr   = (vector float*)0x040000400;
+    vector float*  b1Xaddr   = (vector float*)0x040000800;
+    vector float*  b2Xaddr   = (vector float*)0x040001200;
+
+    M7002_datatrans(x, Xaddr, N*4);     //将X搬移到AM中。
+	// vector float a0; //a0 == 1, no need to calculate
+	// vector float a1;
+	// vector float a2;
+	vector float b0;
+	vector float b1;
+	vector float b2;
+    
+    // a0 = vec_svbcast(a[0]);
+    b0 = vec_svbcast(b[0]);
+    b1 = vec_svbcast(b[1]);
+    b2 = vec_svbcast(b[2]);
+    // a1 = vec_svbcast(a[1]);
+    // a2 = vec_svbcast(a[2]);
+
+    for(i=0;i<N;i+=16)
+    {
+        *b0Xaddr = vec_muli(b0,*Xaddr);
+        *b1Xaddr = vec_muli(b1,*Xaddr);
+        *b2Xaddr = vec_muli(b2,*Xaddr);
+        b0Xaddr++;
+        b1Xaddr++;
+        b2Xaddr++;
+        Xaddr++;
+    }
+    Xaddr   = (vector float*)0x040000000;
+    b0Xaddr   = (vector float*)0x040000400;
+    b1Xaddr   = (vector float*)0x040000800;
+    b2Xaddr   = (vector float*)0x040001200;
+    float b0X[N];
+    float b1X[N];
+    float b2X[N];
+    M7002_datatrans(b0Xaddr, b0X, N*4);     //将b0X搬移到AM中。
+    M7002_datatrans(b1Xaddr, b1X, N*4);     //将b1X搬移到AM中。
+    M7002_datatrans(b2Xaddr, b2X, N*4);     //将b2X搬移到AM中。
+    y[0] = b[0] * x[i] + delay[0];
     for (i = 0; i < nx; i++)
     {
-        y[i] = b[0] * x[i] + delay[0];
-        delay[0] = b[1] * x[i] - a[1] * y[i] + delay[1];
-        delay[1] = b[2] * x[i] - a[2] * y[i]; 
+        y[i] = b0X[i] + delay[0];
+        delay[0] = b1X[i] - a[1] * y[i] + delay[1];
+        delay[1] = b2X[i] - a[2] * y[i]; 
     }
 }           
 /* ======================================================================= */
 /* Parameters of fixed dataset                                             */
 /* ======================================================================= */
-#define N (128)
+
 
 float ptr_y_opt[N];
 float ptr_y_cn[N];
@@ -124,18 +188,38 @@ float ptr_x[N] =
 
  void main ( )
   {	
+    // 将SM 配置成 SRAM 存储模式
+    int *cache=0x040140004; 
+    int *cache1=0x040140000;
+    volatile int cache_ok;
+    *cache=0x1;
+    *cache1=0x1;
+    cache_ok = *cache1 ;
+    while( cache_ok !=0 )
+    cache_ok = *cache1 ;
+
+    // test(ptr_x, ptr_hb, ptr_ha, ptr_delay_opt, ptr_y_opt, 1);
+
+	// float* Xaddr_DDR;
+    // printf("%x",&ptr_x);
+    // Xaddr_DDR = (float*) malloc(sizeof(float)*N);
+    // printf("%x",&Xaddr_DDR);
+
   	int i, j, n;
-  	for (j = 1, n = 8; n <= N; n += 8, j++) {
+ 	for (j = 1, n = 8; n <= N; n += 8, j++) {
         // 直接II型IIR数字滤波器的算法优化
 		DSPF_sp_biquad_cn(ptr_x, ptr_hb, ptr_ha, ptr_delay_cn, ptr_y_cn, n);
    	    DSPF_sp_biquad_opt(ptr_x, ptr_hb, ptr_ha, ptr_delay_opt, ptr_y_opt, n);
-  	}
+ 	}
     int equal = 1;
     for (i = 0; i < N; i++){
         if(ptr_y_cn[i]==ptr_y_opt[i])
             equal *= 1;
-        else
+        else{
             equal *= 0;
+       	    printf("cn: %d = %f \n",i,ptr_y_cn[i]);
+       	    printf("opt: %d = %f \n",i,ptr_y_opt[i]);
+        }
     }
     if(equal)
         printf("test success");

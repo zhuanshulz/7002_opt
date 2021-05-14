@@ -186,6 +186,38 @@ float ptr_x[N] =
     0.4227161, -5.368113, -0.2220449, 2.481202
 };
 
+void function_test(){
+	int i, n;
+  	int equal = 1;
+ 	for (n = 8; n <= N; n += 8) {
+        // 直接II型IIR数字滤波器的算法优化
+		DSPF_sp_biquad_cn(ptr_x, ptr_hb, ptr_ha, ptr_delay_cn, ptr_y_cn, n);
+   	    // DSPF_sp_biquad_cn(ptr_x, ptr_hb, ptr_ha, ptr_delay_opt, ptr_y_opt, n);
+   	    DSPF_sp_biquad_opt(ptr_x, ptr_hb, ptr_ha, ptr_delay_opt, ptr_y_opt, n);
+	    for (i = 0; i < n; i++){
+	        if(ptr_y_cn[i]==ptr_y_opt[i])
+	            equal *= 1;
+	        else{
+	            equal *= 0;
+	        }
+    	}
+ 	}
+    if(equal)
+        printf("test success");
+    else
+        printf("test failed!");
+}
+
+void performance_test(){
+	int n;
+ 	for (n = 8; n <= N; n += 8) {
+        // 直接II型IIR数字滤波器的算法优化
+		DSPF_sp_biquad_cn(ptr_x, ptr_hb, ptr_ha, ptr_delay_cn, ptr_y_cn, n);
+//   	    DSPF_sp_biquad_cn(ptr_x, ptr_hb, ptr_ha, ptr_delay_opt, ptr_y_opt, n);
+   	    DSPF_sp_biquad_cn(ptr_x, ptr_hb, ptr_ha, ptr_delay_opt, ptr_y_opt, n);
+ 	}
+}
+
  void main ( )
   {	
     // 将SM 配置成 SRAM 存储模式
@@ -198,31 +230,6 @@ float ptr_x[N] =
     while( cache_ok !=0 )
     cache_ok = *cache1 ;
 
-    // test(ptr_x, ptr_hb, ptr_ha, ptr_delay_opt, ptr_y_opt, 1);
-
-	// float* Xaddr_DDR;
-    // printf("%x",&ptr_x);
-    // Xaddr_DDR = (float*) malloc(sizeof(float)*N);
-    // printf("%x",&Xaddr_DDR);
-
-  	int i, j, n;
- 	for (j = 1, n = 8; n <= N; n += 8, j++) {
-        // 直接II型IIR数字滤波器的算法优化
-		DSPF_sp_biquad_cn(ptr_x, ptr_hb, ptr_ha, ptr_delay_cn, ptr_y_cn, n);
-   	    DSPF_sp_biquad_opt(ptr_x, ptr_hb, ptr_ha, ptr_delay_opt, ptr_y_opt, n);
- 	}
-    int equal = 1;
-    for (i = 0; i < N; i++){
-        if(ptr_y_cn[i]==ptr_y_opt[i])
-            equal *= 1;
-        else{
-            equal *= 0;
-       	    printf("cn: %d = %f \n",i,ptr_y_cn[i]);
-       	    printf("opt: %d = %f \n",i,ptr_y_opt[i]);
-        }
-    }
-    if(equal)
-        printf("test success");
-    else
-        printf("test failed!");
+// 	function_test();
+  	performance_test();
   }

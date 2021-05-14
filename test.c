@@ -68,7 +68,6 @@ void DSPF_sp_biquad_opt(float *x, float *b, float *a,
     // 128/16 = 8
     int i;
     vector float*  Xaddr   = (vector float*)0x040000000;
-    // vector float*  Yaddr   = (vector float*)0x040000200;
     vector float*  b0Xaddr   = (vector float*)0x040000400;
     vector float*  b1Xaddr   = (vector float*)0x040000800;
     vector float*  b2Xaddr   = (vector float*)0x040001200;
@@ -84,37 +83,36 @@ void DSPF_sp_biquad_opt(float *x, float *b, float *a,
     b1 = vec_svbcast(b[1]);
     b2 = vec_svbcast(b[2]);
 
-
     for(i=0;i<N;i+=16)
     {
         *b0Xaddr = vec_muli(b0,*Xaddr);
-        *b1Xaddr = vec_muli(b1,*Xaddr);
-        *b2Xaddr = vec_muli(b2,*Xaddr);
         b0Xaddr++;
+        Xaddr++;
+    }
+    Xaddr   = (vector float*)0x040000004;
+    b0Xaddr   = (vector float*)0x040000408;
+    b1Xaddr   = (vector float*)0x040000800;
+    for(i=0;i<N;i+=16)
+    {
+        *b1Xaddr = vec_mula(b1,*Xaddr,*b0Xaddr);
+        b1Xaddr++;
+        b0Xaddr++;
+        Xaddr++;
+    }
+    Xaddr   = (vector float*)0x040000000;
+    b1Xaddr   = (vector float*)0x040000800;
+    b2Xaddr   = (vector float*)0x040001200;
+    for(i=0;i<N;i+=16)
+    {
+        *b2Xaddr = vec_mula(b2,*Xaddr,*b1Xaddr);
         b1Xaddr++;
         b2Xaddr++;
         Xaddr++;
     }
-    b0Xaddr   = (vector float*)0x040000408;
-    b1Xaddr   = (vector float*)0x040000804;
-    for(i=2;i<N;i+=16)
-    {
-        *bxX = vec_add(*b0Xaddr,*b1Xaddr);
-        bxX++;
-        b0Xaddr++;
-        b1Xaddr++;
-    }
-    bxX   = (vector float*)0x040001600;
     b2Xaddr   = (vector float*)0x040001200;
-    for(i=2;i<N;i+=16)
-    {
-        *bxX = vec_add(*bxX,*b2Xaddr);
-        bxX++;
-        b2Xaddr++;
-    }
-    bxX   = (vector float*)0x040001600;
+
     float b_X[N-2];
-    M7002_datatrans(bxX, b_X, (N-2)*4);
+    M7002_datatrans(b2Xaddr, b_X, (N-2)*4);
 
 
    float sum1, sum2, sum3, sum4, sum5, sum, x0, x1, y0;
@@ -133,7 +131,6 @@ void DSPF_sp_biquad_opt(float *x, float *b, float *a,
        x0   = x1;
        x1   = x[i];
        y0   = sum;
-       sum  = -sum4 - sum5;
        sum  = b_X[i-2] - sum4 - sum5;
        y[i] = sum;
    }
@@ -204,7 +201,7 @@ void function_test(){
    	    DSPF_sp_biquad_opt(ptr_x, ptr_hb, ptr_ha, ptr_delay_opt, ptr_y_opt, n);
 	    for (i = 0; i < n; i++){
             // printf("%d : %f , %f\n",i,ptr_y_cn[i] , ptr_y_opt[i]);
-	        if(fabs(ptr_y_cn[i]-ptr_y_opt[i]) < 0.00001)		// 由于多次运算会造成误差
+	        if(fabs(ptr_y_cn[i]-ptr_y_opt[i]) < 0.0001)		// 由于多次运算会造成误差
 	            equal *= 1;
 	        else{
 	            equal *= 0;
@@ -239,6 +236,6 @@ void performance_test(){
     while( cache_ok !=0 )
     cache_ok = *cache1 ;
 
-// 	function_test();
+	// function_test();
   	performance_test();
   }

@@ -62,12 +62,6 @@ void DSPF_sp_biquad_cn(float *x, float *b, float *a,
 void DSPF_sp_biquad_opt(float *x, float *b, float *a,
     float *delay, float *y, const int nx)
 {
-    // float* Xaddr_DDR;
-    // int X_Num = N, j = 0;
-    // Xaddr_DDR = (float*) malloc(sizeof(float)*X_Num);
-    // for(j=0;j<X_Num;j++) {
-	//     Xaddr_DDR[j] = x[j];
-    // }
 	
     /*定义vector float指针变量，并在AM中分配地址*/
     // 128个float类型数据，128*4 = 512 = 0x200
@@ -79,20 +73,17 @@ void DSPF_sp_biquad_opt(float *x, float *b, float *a,
     vector float*  b1Xaddr   = (vector float*)0x040000800;
     vector float*  b2Xaddr   = (vector float*)0x040001200;
 
+    vector float*  bxX   = (vector float*)0x040001600;
     M7002_datatrans(x, Xaddr, N*4);     //将X搬移到AM中。
-	// vector float a0; //a0 == 1, no need to calculate
-	// vector float a1;
-	// vector float a2;
+
 	vector float b0;
 	vector float b1;
 	vector float b2;
     
-    // a0 = vec_svbcast(a[0]);
     b0 = vec_svbcast(b[0]);
     b1 = vec_svbcast(b[1]);
     b2 = vec_svbcast(b[2]);
-    // a1 = vec_svbcast(a[1]);
-    // a2 = vec_svbcast(a[2]);
+
 
     for(i=0;i<N;i+=16)
     {
@@ -104,54 +95,46 @@ void DSPF_sp_biquad_opt(float *x, float *b, float *a,
         b2Xaddr++;
         Xaddr++;
     }
-    Xaddr   = (vector float*)0x040000000;
-    b0Xaddr   = (vector float*)0x040000400;
-    b1Xaddr   = (vector float*)0x040000800;
+    b0Xaddr   = (vector float*)0x040000408;
+    b1Xaddr   = (vector float*)0x040000804;
+    for(i=2;i<N;i+=16)
+    {
+        *bxX = vec_add(*b0Xaddr,*b1Xaddr);
+        bxX++;
+        b0Xaddr++;
+        b1Xaddr++;
+    }
+    bxX   = (vector float*)0x040001600;
     b2Xaddr   = (vector float*)0x040001200;
-    float b0X[N];
-    float b1X[N];
-    float b2X[N];
-    M7002_datatrans(b0Xaddr, b0X, N*4);     //将b0X搬移到AM中。
-    M7002_datatrans(b1Xaddr, b1X, N*4);     //将b1X搬移到AM中。
-    M7002_datatrans(b2Xaddr, b2X, N*4);     //将b2X搬移到AM中。
-    // // y[0] = b[0] * x[i] + delay[0];  //加入这句后性能会提高，不知道为什么
-    // for (i = 0; i < nx; i++)
-    // {
-    //     y[i] = b0X[i] + delay[0];
-    //     delay[0] = b1X[i] - a[1] * y[i] + delay[1];
-    //     delay[1] = b2X[i] - a[2] * y[i]; 
-    // }
+    for(i=2;i<N;i+=16)
+    {
+        *bxX = vec_add(*bxX,*b2Xaddr);
+        bxX++;
+        b2Xaddr++;
+    }
+    bxX   = (vector float*)0x040001600;
+    float b_X[N-2];
+    M7002_datatrans(bxX, b_X, (N-2)*4);
+
 
    float sum1, sum2, sum3, sum4, sum5, sum, x0, x1, y0;
-    y[0] = b0X[0] + delay[0];
-    y[1] = b0X[1] + delay[1] + b1X[0] - a[1] * y[0];
+    y[0] = b[0] * x[0] + delay[0];
+    y[1] = b[0] * x[1] + delay[1] + b[1] * x[0] - a[1] * y[0];
     /* prepare temp variables for i = 2 */
     x0  = x[0];
     x1  = x[1];
     y0  = y[0];
     sum = y[1];
-    // sum5 = b0X[i] + delay[0] = y[i];
-    // sum = y[i-1];
-    // y0 = y[i-2];
-    // sum4 = a[2] * y[i];
-    // sum1 = b[0] * x[i];
-    // x1 = x[i-1];
-    // sum2 = b[1] * x[i-1];
-    // x0 = x[i-2];
-    // sum3 = b[2] * x[i-2];
+
    for (i = 2; i < nx; i++)
    {
        sum5 = a[1] * sum;
        sum4 = a[2] * y0;
-       sum1 = b0X[i];
-       sum2 = b1X[i-1];
-       sum3 = b2X[i-2];
-
        x0   = x1;
        x1   = x[i];
-
        y0   = sum;
-       sum  = sum3 + sum2 + sum1 - sum4 - sum5;
+       sum  = -sum4 - sum5;
+       sum  = b_X[i-2] - sum4 - sum5;
        y[i] = sum;
    }
    /* find final delay elements to return */

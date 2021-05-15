@@ -56,6 +56,8 @@ void DSPF_sp_biquad_cn(float *x, float *b, float *a,
         delay[0] = b[1] * x[i] - a[1] * y[i] + delay[1];
         delay[1] = b[2] * x[i] - a[2] * y[i]; 
     }
+    // printf("cn_delay0:%f\n",delay[0]);
+    // printf("cn_delay1:%f\n",delay[1]);
 }        
 
 
@@ -73,7 +75,7 @@ void DSPF_sp_biquad_opt(float *x, float *b, float *a,
     vector float*  b2Xaddr   = (vector float*)0x040001200;
 
     vector float*  bxX   = (vector float*)0x040001600;
-    M7002_datatrans(x, Xaddr, N*4);     //将X搬移到AM中。
+    M7002_datatrans(x, Xaddr, nx*4);     //将X搬移到AM中。
 
 	vector float b0;
 	vector float b1;
@@ -83,7 +85,7 @@ void DSPF_sp_biquad_opt(float *x, float *b, float *a,
     b1 = vec_svbcast(b[1]);
     b2 = vec_svbcast(b[2]);
 
-    for(i=0;i<N;i+=16)
+    for(i=0;i<nx;i+=16)
     {
         *b0Xaddr = vec_muli(b0,*Xaddr);
         b0Xaddr++;
@@ -92,7 +94,7 @@ void DSPF_sp_biquad_opt(float *x, float *b, float *a,
     Xaddr   = (vector float*)0x040000004;
     b0Xaddr   = (vector float*)0x040000408;
     b1Xaddr   = (vector float*)0x040000800;
-    for(i=0;i<N;i+=16)
+    for(i=0;i<nx;i+=16)
     {
         *b1Xaddr = vec_mula(b1,*Xaddr,*b0Xaddr);
         b1Xaddr++;
@@ -102,7 +104,7 @@ void DSPF_sp_biquad_opt(float *x, float *b, float *a,
     Xaddr   = (vector float*)0x040000000;
     b1Xaddr   = (vector float*)0x040000800;
     b2Xaddr   = (vector float*)0x040001200;
-    for(i=0;i<N;i+=16)
+    for(i=0;i<nx;i+=16)
     {
         *b2Xaddr = vec_mula(b2,*Xaddr,*b1Xaddr);
         b1Xaddr++;
@@ -112,7 +114,7 @@ void DSPF_sp_biquad_opt(float *x, float *b, float *a,
     b2Xaddr   = (vector float*)0x040001200;
 
     float b_X[N-2];
-    M7002_datatrans(b2Xaddr, b_X, (N-2)*4);
+    M7002_datatrans(b2Xaddr, b_X, (nx-2)*4);
 
 
    float sum1, sum2, sum3, sum4, sum5, sum, x0, x1, y0;
@@ -123,20 +125,79 @@ void DSPF_sp_biquad_opt(float *x, float *b, float *a,
     x1  = x[1];
     y0  = y[0];
     sum = y[1];
+    // a1 = a[1];
+    // a2 = a[2];
+    /*--- parameter comments  ---*/
+    // sum5 = b0X[i] + delay[0] = y[i];
+    // sum = y[i-1];
+    // y0 = y[i-2];
+    // sum4 = a[2] * y[i];
+    // sum1 = b[0] * x[i];
+    // x1 = x[i-1];
+    // sum2 = b[1] * x[i-1];
+    // x0 = x[i-2];
+    // sum3 = b[2] * x[i-2];
+    /*--- parameter comments  ---*/
 
-   for (i = 2; i < nx; i++)
+
+// loop tiling
+   for (i = 2; i < nx; i+=8)
    {
        sum5 = a[1] * sum;
        sum4 = a[2] * y0;
-       x0   = x1;
-       x1   = x[i];
        y0   = sum;
        sum  = b_X[i-2] - sum4 - sum5;
        y[i] = sum;
+
+       sum5 = a[1] * sum;
+       sum4 = a[2] * y0;
+       y0   = sum;
+       sum  = b_X[i-1] - sum4 - sum5;
+       y[i+1] = sum;
+
+       sum5 = a[1] * sum;
+       sum4 = a[2] * y0;
+       y0   = sum;
+       sum  = b_X[i] - sum4 - sum5;
+       y[i+2] = sum;
+
+       sum5 = a[1] * sum;
+       sum4 = a[2] * y0;
+       y0   = sum;
+       sum  = b_X[i+1] - sum4 - sum5;
+       y[i+3] = sum;
+
+       sum5 = a[1] * sum;
+       sum4 = a[2] * y0;
+       y0   = sum;
+       sum  = b_X[i+2] - sum4 - sum5;
+       y[i+4] = sum;
+
+       sum5 = a[1] * sum;
+       sum4 = a[2] * y0;
+       y0   = sum;
+       sum  = b_X[i+3] - sum4 - sum5;
+       y[i+5] = sum;
+
+       sum5 = a[1] * sum;
+       sum4 = a[2] * y0;
+       y0   = sum;
+       sum  = b_X[i+4] - sum4 - sum5;
+       y[i+6] = sum;
+
+       sum5 = a[1] * sum;
+       sum4 = a[2] * y0;
+       y0   = sum;
+       sum  = b_X[i+5] - sum4 - sum5;
+       y[i+7] = sum;
    }
+
    /* find final delay elements to return */
-   delay[0] = b[1] * x1 + b[2] * x0 - a[1] * sum - a[2] * y0;
-   delay[1] = b[2] * x1 - a[2] * sum;
+   // 这里注意，在使用function test的时候，必须要有这个delay的计算，
+   // 因为其是在上一次的结果参数的基础上继续执行，所以delay参数需要计算出来并更新，
+   // 以便下一次循环的计算。
+   delay[0] = b[1] * x[nx-1] + b[2] * x[nx-2] - a[1] * y[nx-1] - a[2] * y[nx-2];
+   delay[1] = b[2] * x[nx-1] - a[2] * y[nx-1];
 }           
 /* ======================================================================= */
 /* Parameters of fixed dataset                                             */
@@ -204,6 +265,7 @@ void function_test(){
 	        if(fabs(ptr_y_cn[i]-ptr_y_opt[i]) < 0.0001)		// 由于多次运算会造成误差
 	            equal *= 1;
 	        else{
+            // printf("n=%d, %d : %f , %f\n",n,i,ptr_y_cn[i] , ptr_y_opt[i]);
 	            equal *= 0;
 	        }
     	}

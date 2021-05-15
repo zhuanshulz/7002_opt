@@ -118,6 +118,9 @@ void DSPF_sp_biquad_opt(float *x, float *b, float *a,
 
 
    float sum1, sum2, sum3, sum4, sum5, sum, x0, x1, y0;
+   float a1, a2;
+
+    // 软件流水线——v1.2
     y[0] = b[0] * x[0] + delay[0];
     y[1] = b[0] * x[1] + delay[1] + b[1] * x[0] - a[1] * y[0];
     /* prepare temp variables for i = 2 */
@@ -125,8 +128,10 @@ void DSPF_sp_biquad_opt(float *x, float *b, float *a,
     x1  = x[1];
     y0  = y[0];
     sum = y[1];
-    // a1 = a[1];
-    // a2 = a[2];
+
+    // 将访存操作独立出来——v1.6
+    a1 = a[1];
+    a2 = a[2];
     /*--- parameter comments  ---*/
     // sum5 = b0X[i] + delay[0] = y[i];
     // sum = y[i-1];
@@ -140,53 +145,53 @@ void DSPF_sp_biquad_opt(float *x, float *b, float *a,
     /*--- parameter comments  ---*/
 
 
-// loop tiling
+// loop tiling——v1.5
    for (i = 2; i < nx; i+=8)
    {
-       sum5 = a[1] * sum;
-       sum4 = a[2] * y0;
+       sum5 = a1 * sum;
+       sum4 = a2 * y0;
        y0   = sum;
        sum  = b_X[i-2] - sum4 - sum5;
        y[i] = sum;
 
-       sum5 = a[1] * sum;
-       sum4 = a[2] * y0;
+       sum5 = a1 * sum;
+       sum4 = a2 * y0;
        y0   = sum;
        sum  = b_X[i-1] - sum4 - sum5;
        y[i+1] = sum;
 
-       sum5 = a[1] * sum;
-       sum4 = a[2] * y0;
+       sum5 = a1 * sum;
+       sum4 = a2 * y0;
        y0   = sum;
        sum  = b_X[i] - sum4 - sum5;
        y[i+2] = sum;
 
-       sum5 = a[1] * sum;
-       sum4 = a[2] * y0;
+       sum5 = a1 * sum;
+       sum4 = a2 * y0;
        y0   = sum;
        sum  = b_X[i+1] - sum4 - sum5;
        y[i+3] = sum;
 
-       sum5 = a[1] * sum;
-       sum4 = a[2] * y0;
+       sum5 = a1 * sum;
+       sum4 = a2 * y0;
        y0   = sum;
        sum  = b_X[i+2] - sum4 - sum5;
        y[i+4] = sum;
 
-       sum5 = a[1] * sum;
-       sum4 = a[2] * y0;
+       sum5 = a1 * sum;
+       sum4 = a2 * y0;
        y0   = sum;
        sum  = b_X[i+3] - sum4 - sum5;
        y[i+5] = sum;
 
-       sum5 = a[1] * sum;
-       sum4 = a[2] * y0;
+       sum5 = a1 * sum;
+       sum4 = a2 * y0;
        y0   = sum;
        sum  = b_X[i+4] - sum4 - sum5;
        y[i+6] = sum;
 
-       sum5 = a[1] * sum;
-       sum4 = a[2] * y0;
+       sum5 = a1 * sum;
+       sum4 = a2 * y0;
        y0   = sum;
        sum  = b_X[i+5] - sum4 - sum5;
        y[i+7] = sum;

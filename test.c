@@ -119,19 +119,26 @@ void DSPF_sp_biquad_opt(float *x, float *b, float *a,
 
    float sum1, sum2, sum3, sum4, sum5, sum, x0, x1, y0;
    float a1, a2;
+   float b0_0, b1_0, b2_0;
+
+    // 细节访存优化，对参数进行一次访存——v1.7
+    b0_0 = b[0];
+    b1_0 = b[1];
+    b2_0 = b[2];
+    // 将访存操作独立出来——v1.6
+    a1 = a[1];
+    a2 = a[2];
 
     // 软件流水线——v1.2
-    y[0] = b[0] * x[0] + delay[0];
-    y[1] = b[0] * x[1] + delay[1] + b[1] * x[0] - a[1] * y[0];
+    y[0] = b0_0 * x[0] + delay[0];
+    y[1] = b0_0 * x[1] + delay[1] + b1_0 * x[0] - a1 * y[0];
     /* prepare temp variables for i = 2 */
     x0  = x[0];
     x1  = x[1];
     y0  = y[0];
     sum = y[1];
 
-    // 将访存操作独立出来——v1.6
-    a1 = a[1];
-    a2 = a[2];
+
     /*--- parameter comments  ---*/
     // sum5 = b0X[i] + delay[0] = y[i];
     // sum = y[i-1];
@@ -148,6 +155,7 @@ void DSPF_sp_biquad_opt(float *x, float *b, float *a,
 // loop tiling——v1.5
    for (i = 2; i < nx; i+=8)
    {
+       // 循环内的程序调度没有太大的影响，可能与编译器的优化有关。
        sum5 = a1 * sum;
        sum4 = a2 * y0;
        y0   = sum;
@@ -201,8 +209,8 @@ void DSPF_sp_biquad_opt(float *x, float *b, float *a,
    // 这里注意，在使用function test的时候，必须要有这个delay的计算，
    // 因为其是在上一次的结果参数的基础上继续执行，所以delay参数需要计算出来并更新，
    // 以便下一次循环的计算。
-   delay[0] = b[1] * x[nx-1] + b[2] * x[nx-2] - a[1] * y[nx-1] - a[2] * y[nx-2];
-   delay[1] = b[2] * x[nx-1] - a[2] * y[nx-1];
+   delay[0] = b1_0 * x[nx-1] + b2_0 * x[nx-2] - a1 * y[nx-1] - a2 * y[nx-2];
+   delay[1] = b2_0 * x[nx-1] - a2 * y[nx-1];
 }           
 /* ======================================================================= */
 /* Parameters of fixed dataset                                             */
